@@ -74,6 +74,7 @@ var buildCmd = &cobra.Command{
 	Long:  `Tries to locate the Snowman configuration, views, queries, etc in the current directory. Then tries to build a Snowman site.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
+		// handle commandline options
 		if staticBuildOption {
 			if err := static.ClearStatic(); err != nil {
 				utils.ErrorExit("Failed to clear old static files: ", err)
@@ -92,11 +93,13 @@ var buildCmd = &cobra.Command{
 			return err
 		}
 
+		// discover layouts located in /templates/layouts
 		layouts, err := DiscoverLayouts()
 		if err != nil {
 			return utils.ErrorExit("Failed to find any template files.", err)
 		}
 
+		// discover SPARQL queries located in /queries
 		queries, err := DiscoverQueries()
 		if err != nil {
 			return utils.ErrorExit("Failed to index query files.", err)
@@ -117,15 +120,19 @@ var buildCmd = &cobra.Command{
 			return utils.ErrorExit("Failed to initiate resources cache manager.", err)
 		}
 
+		// discover Views located in /views.yaml
+		// now we have the URL, the template and the query file associated with each view
 		discoveredViews, err := views.DiscoverViews(layouts)
 		if err != nil {
 			return utils.ErrorExit("Failed to discover views.", err)
 		}
 
+		// delete static html pages from previous runs located at /site
 		if err := os.RemoveAll("site"); err != nil {
 			return utils.ErrorExit("Failed to remove the existing site directory.", err)
 		}
 
+		// discover static files like css files at /static
 		if _, err := os.Stat("static"); os.IsNotExist(err) {
 			printVerbose("Failed to locate static files. Skipping...")
 		} else {
@@ -135,9 +142,16 @@ var buildCmd = &cobra.Command{
 			printVerbose("Finished copying static files.")
 		}
 
+		// rendered paths is a map indicating if a URL has a rendering or not, renderedPaths["/site/index.html"]true
 		var renderedPaths = make(map[string]bool)
+
+		// for all views found in /views.yaml
 		for _, view := range discoveredViews {
+
+			// initialize query results, maps URL to SPARQL bindings file, "/site/index.html"-->sparqlBindingsFile.json
 			results := make([]map[string]rdf.Term, 0)
+
+			// run SPARQL query if not cached, store bindings in results
 			if view.ViewConfig.QueryFile != "" {
 				printVerbose("Issuing query " + view.ViewConfig.QueryFile)
 				results, err = sparql.CurrentRepository.Query(view.ViewConfig.QueryFile)
@@ -147,7 +161,9 @@ var buildCmd = &cobra.Command{
 			}
 
 			// if the page is rendered based on SPARQL result rows
+			// we have a URL constructed at runtime, e.g. "orienteers/{{qid}}.html", where qid is variable filled in by a query
 			if view.MultipageVariableHook != nil {
+				// loop for all pages with a constructed URL
 				for _, row := range results {
 					if _, ok := row[*view.MultipageVariableHook]; !ok {
 						err := fmt.Errorf(*view.MultipageVariableHook + " not found in SPARQL result row.")
@@ -166,17 +182,20 @@ var buildCmd = &cobra.Command{
 						fmt.Println("Warning: Writing to " + outputPath + " for the second time.")
 					}
 
+					// generate static html page from template, layouts and query results
 					if err := view.RenderPage(outputPath, row); err != nil {
 						return utils.ErrorExit("Failed to render page at "+outputPath, err)
 					}
 					printVerbose("Rendered page at site/" + outputPath)
 					renderedPaths[outputPath] = true
 				}
+			// we have a static URL
 			} else {
 				if renderedPaths["site/"+view.ViewConfig.Output] {
 					fmt.Println("Warning: Writing to " + "site/" + view.ViewConfig.Output + " for the second time.")
 				}
 
+				// generate static html page from template, layouts and query results
 				if err := view.RenderPage("site/"+view.ViewConfig.Output, results); err != nil {
 					return utils.ErrorExit("Failed to render page at "+"site/"+view.ViewConfig.Output, err)
 				}

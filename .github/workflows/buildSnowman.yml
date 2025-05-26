@@ -23,7 +23,7 @@ jobs:
         go-version: '1.20'
 
     - name: Build
-      run: go build -v ./... # set the output file
+      run: go build -v -o snowman main.go # set the output file
 
     - name: Test
       run: go test -v ./...

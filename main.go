@@ -1,6 +1,6 @@
 package main
 
-import "github.com/glaciers-in-archives/snowman/cmd"
+import "github.com/pdacton/snowman/cmd"
 
 func main() {
 	cmd.Execute()

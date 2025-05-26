@@ -32,4 +32,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: go-executable
-        path: main  # Change this to match your output file
+        path: snowman  # Change this to match your output file
